@@ -9,6 +9,7 @@
         "symbols": [
             "INDIGO25DEC4500PE"
         ],
+        "product_type": "NRML",
         "hma_period": 30,
         "sl_percentage": 1.0,
         "tp_percentage": 2.0,

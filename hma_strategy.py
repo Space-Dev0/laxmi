@@ -14,6 +14,7 @@ class HMAStrategy:
         self.symbol = settings['symbol']
         self.exchange = settings['exchange']
         self.interval = settings['interval_minute']
+        self.product_type = settings['product_type']
         self.quantity = str(settings['quantity']) # mStock expects string for quantity
         
         # Token Info
@@ -133,13 +134,17 @@ class HMAStrategy:
             cols = ['open', 'high', 'low', 'close', 'volume']
             full_df[cols] = full_df[cols].apply(pd.to_numeric)
 
-            # Calculate HMA
-            full_df['hma'] = self._calculate_hma(full_df['close'], self.hma_period)
-            
-            # Save to self.data
             self.data = full_df.dropna().reset_index(drop=True)
+
+            # 1. Convert to HA
+            self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
+
+            # 2. Calculate HMA on HA_CLOSE
+            self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period).dropna().reset_index(drop=True)
+
+            # Save to self.data
             
-            # self.data.to_csv("output_debug.csv")  # For debugging purposes
+            self.data.to_csv("output_debug.csv")  # For debugging purposes
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]
@@ -147,7 +152,18 @@ class HMAStrategy:
 
         except Exception as e:
             log.error(f"[{self.symbol}] Critical error in data fetch: {e}")
-
+    
+    def _calculate_heikin_ashi(self, df):
+        ha_df = df.copy()
+        ha_df['ha_close'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+        ha_open = [df['open'].iloc[0]]
+        for i in range(1, len(df)):
+            ha_open.append((ha_open[-1] + ha_df['ha_close'].iloc[i-1]) / 2)
+        ha_df['ha_open'] = ha_open
+        ha_df['ha_high'] = ha_df[['high', 'ha_open', 'ha_close']].max(axis=1)
+        ha_df['ha_low'] = ha_df[['low', 'ha_open', 'ha_close']].min(axis=1)
+        return ha_df
+    
     def process_tick(self, tick_data):
         """
         Called from Main thread dispatcher.
@@ -198,26 +214,30 @@ class HMAStrategy:
         except Exception as e:
             log.error(f"[{self.symbol}] Tick Processing Error: {e}")
 
-    def _on_candle_close(self, candle):
-        """Append candle, recalc HMA, Check Signals"""
-        # Append to dataframe
-        new_row = pd.DataFrame([{
-            'time': candle['time'],
-            'open': candle['open'],
-            'high': candle['high'],
-            'low': candle['low'],
-            'close': candle['close']
-        }])
-        
-        self.data = pd.concat([self.data, new_row], ignore_index=True)
-        
-        # Recalculate HMA (Optimize: only last N rows needed but full recalc is safer for now)
-        self.data['hma'] = self._calculate_hma(self.data['close'], self.hma_period)
-        
-        # Analyze Signal
+    def _on_candle_close(self, raw_candle):
+        # Calculate HA for this single new candle
+        if self.data.empty:
+            ha_open = raw_candle['open']
+            ha_close = (raw_candle['open'] + raw_candle['high'] + raw_candle['low'] + raw_candle['close']) / 4
+        else:
+            prev_ha = self.data.iloc[-1]
+            ha_open = (prev_ha['ha_open'] + prev_ha['ha_close']) / 2
+            ha_close = (raw_candle['open'] + raw_candle['high'] + raw_candle['low'] + raw_candle['close']) / 4
 
-        # self._place_order("BUY", self.quantity)
-        # exit(0)
+        ha_high = max(raw_candle['high'], ha_open, ha_close)
+        ha_low = min(raw_candle['low'], ha_open, ha_close)
+
+        # Append
+        new_row = {
+            'time': raw_candle['time'],
+            'open': raw_candle['open'], 'close': raw_candle['close'], # Keep raw for logging/orders
+            'ha_open': ha_open, 'ha_high': ha_high, 'ha_low': ha_low, 'ha_close': ha_close
+        }
+        self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
+        
+        # Recalculate HMA on HA Close
+        self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
+        
         self._analyze_signal()
 
     def _analyze_signal(self):
@@ -232,13 +252,13 @@ class HMAStrategy:
         
         # HMA Crossover Logic
         # Buy: Price Crosses Above HMA
-        if prev['close'] <= prev['hma'] and curr['close'] > curr['hma']:
+        if prev['ha_close'] <= prev['hma'] and curr['ha_close'] > curr['hma']:
             signal = "BUY"
         # Sell: Price Crosses Below HMA
-        elif prev['close'] >= prev['hma'] and curr['close'] < curr['hma']:
+        elif prev['ha_close'] >= prev['hma'] and curr['ha_close'] < curr['hma']:
             signal = "SELL"
             
-        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | Close: {curr['close']} | HMA: {curr['hma']:.2f} | Raw Signal: {signal}")
+        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']} | HMA: {curr['hma']:.2f} | Raw Signal: {signal}")
 
         # Confirmation Logic
         if signal:
@@ -253,9 +273,9 @@ class HMAStrategy:
         # Check Pending Confirmation
         if self.pending_signal:
             is_valid = False
-            if self.pending_signal == "BUY" and curr['close'] > curr['hma']:
+            if self.pending_signal == "BUY" and curr['ha_close'] > curr['hma']:
                 is_valid = True
-            elif self.pending_signal == "SELL" and curr['close'] < curr['hma']:
+            elif self.pending_signal == "SELL" and curr['ha_close'] < curr['hma']:
                 is_valid = True
             
             if is_valid:
@@ -319,7 +339,7 @@ class HMAStrategy:
                     _transaction_type=transaction_type,
                     _order_type="LIMIT",         # <--- Changed to LIMIT
                     _quantity=qty,
-                    _product="NRML",
+                    _product=self.product_type,
                     _validity="DAY",
                     _price=limit_price,          # <--- Pass the specific price
                     _trigger_price="0",
