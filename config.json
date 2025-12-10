@@ -1,0 +1,21 @@
+{
+    "api_settings": {
+        "api_key": "ZDZJJlh9L2Nrqs/z/mnsQxJGY1+X/EsQRs+sQjhj+Bw=",
+        "username": "7007504878",
+        "password": "Ganpati@421"
+    },
+    "strategy_settings": {
+        "exchange": "NFO",
+        "symbols": [
+            "INDIGO25DEC4500PE"
+        ],
+        "hma_period": 30,
+        "sl_percentage": 1.0,
+        "tp_percentage": 2.0,
+        "interval_minute": 1,
+        "quantity": 150,
+        "square_off_time": "15:15",
+        "confirmation_candles": 1
+    },
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVU0VSTkFNRSI6Ik1BMTY3OTQzIiwiQ0xJRU5UTkFNRSI6IkdVTkpBTiBBR0FSV0FMIiwiVVNFUl9ERVRBSUxTIjoiOER3UGdiNFJSMVhGSmxpQ0dDMjh1UGg5ZjlIS0VLZjd1bTcydlBPMjNtV1RSZUowdERWNDl2SitwTmd4UE5XZWJFTFJuNHl2VHRyV0lsOEZ3QmNUTVF6WUdCK2tyVms5SmdWek5sbjh1Q3VJQWVhMnlyVUF3bnhadmVvY0ZFcHk1UlAvQ3J1Ym1QQ0plNThMY3hvMG1mZ1hnazVTVG5lb2FxRFBFc1ZuNTQ5VWY5aXM0KzJzZ1RiTGdOWEIwTWNHWWdUU0VieWwweGtrZ210UTNBL0ZIajlLdmN5cDV4clZhZGg3UTRUUDJiUlV2TWlEK1Y0dnVTOUQ0dU9MTkNmTnUyNklqZWtmU2xXU1RJYVZHWlk1TDRUVWY0TEhnT2VSM0MxaFBvQm1La3RYSWF2VktPQnFHMG11MUcwejFRM2hUUmFzVmRPTi9HdmhZWWJwR3VaYlJHSnFYN2Fmd2Fic3RVdzcwTkVhQ1A4PSIsIlVTRVJJRCI6Ik1BMTY3OTQzIiwiQUNDRVNTX1RPS0VOIjoiZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SmhkV1FpT2lKdGFYSmhaUzVwYmlJc0ltVjRjQ0k2TVRjMk5UUXlOalEwTUN3aWFXRjBJam94TnpZMU16UXdNRFF3TENKcGMzTWlPaUp0YVhKaFpTNXBiaUlzSW01aVppSTZNVFEwTkRRM09EUXdNQ3dpY0dadElqb2lNU0lzSW5ScFpDSTZJalkzSWl3aWRXbGtJam9pTlRBd016RTNJaXdpZG1sa0lqb2lNakVpZlEuUWVSUi02YVBjYngwZHlsUmhua0lNRkFETld6YVRDZHNKR2IzVjZzUUszMCIsIkFQSVRZUEUiOiJUWVBFQSIsIlVJRCI6IjYyMGU1MjdjLWFlNDgtNGI1Ni1iNDllLTQxZjcxMmFmYzBhMSIsIm5iZiI6MTc2NTM0MDA0MCwiZXhwIjoxNzY1MzkxNDAwLCJpYXQiOjE3NjUzNDAwNDB9.m1V_grbzlX9Y-wpBHERdNfTv_Qmuq0xBdWmfHSUIwvM"
+}
