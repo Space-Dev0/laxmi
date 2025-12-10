@@ -16,6 +16,7 @@
         "tp_percentage": 2.0,
         "interval_minute": 1,
         "quantity": 150,
+        "order_type": "MARKET",
         "product_type": "LIMIT",
         "square_off_time": "15:15",
         "confirmation_candles": 1
