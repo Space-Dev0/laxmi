@@ -295,24 +295,16 @@ class HMAStrategy:
         
         # If we have a position and get an opposite signal, Reverse
         if self.position == "LONG" and signal == "SELL":
-            log.info(f"[{self.symbol}] Reversal: Exiting LONG, Entering SHORT @ {price}")
+            log.info(f"[{self.symbol}] Exiting LONG @ {price}")
             # Exit existing
             self._place_order("SELL", self.quantity, price) 
             self.position = "FLAT"
-            time.sleep(1)
-            # Enter new
-            self._place_order("SELL", self.quantity, price) 
-            self.position = "SHORT"
-            
+
         elif self.position == "SHORT" and signal == "BUY":
-            log.info(f"[{self.symbol}] Reversal: Exiting SHORT, Entering LONG @ {price}")
+            log.info(f"[{self.symbol}] Exiting SHORT @ {price}")
             # Exit existing
             self._place_order("BUY", self.quantity, price) 
             self.position = "FLAT"
-            time.sleep(1)
-            # Enter new
-            self._place_order("BUY", self.quantity, price) 
-            self.position = "LONG"
             
         elif self.position == "FLAT":
             log.info(f"[{self.symbol}] Entry: Going {signal} @ {price}")
