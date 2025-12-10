@@ -14,6 +14,7 @@ from tradingapi_a.mticker import MTicker
 
 # Import Strategy
 from hma_strategy import HMAStrategy
+from ema_strategy import EMAStrategy
 
 # Logging Setup
 logging.basicConfig(
@@ -169,6 +170,22 @@ def strategy_monitor_loop():
 def main():
     log.info("--- mStock HMA Bot Starting ---")
     
+    print("\nSelect Strategy:")
+    print("1. HMA Price Crossover (Heikin Ashi)")
+    print("2. EMA Crossover (Heikin Ashi)")
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    StrategyClass = None
+    if choice == '1':
+        StrategyClass = HMAStrategy
+        log.info("Selected: HMA Strategy")
+    elif choice == '2':
+        StrategyClass = EMAStrategy
+        log.info("Selected: EMA Strategy")
+    else:
+        log.critical("Invalid choice. Exiting.")
+        sys.exit(1)
+
     # 1. Load Config
     config = load_config()
     api_set = config['api_settings']
@@ -218,7 +235,7 @@ def main():
                 instance_settings['symbol'] = symbol
                 
                 # Now pass instance_settings which contains the 'symbol' key
-                strategy = HMAStrategy(mconnect, token_map, **instance_settings)
+                strategy = StrategyClass(mconnect, token_map, **instance_settings)
                 
                 # Websocket uses Token as Int for routing
                 t_id = int(token_map[symbol]['token'])

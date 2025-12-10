@@ -7,7 +7,7 @@ import time
 # Configure Logger
 log = logging.getLogger(__name__)
 
-class HMAStrategy:
+class EMAStrategy:
     def __init__(self, mconnect_obj, token_map, **settings):
         # API and Config
         self.api = mconnect_obj
@@ -23,11 +23,14 @@ class HMAStrategy:
             raise ValueError(f"Token not found for symbol {self.symbol}")
         
         self.token_info = token_map[self.symbol]
-        self.token_id = self.token_info['token'] # String '22'
-        self.int_token = int(self.token_id)      # Int 22 for websocket matching
+        self.token_id = self.token_info['token'] 
+        self.int_token = int(self.token_id)      
         
-        # Strategy Parameters
-        self.hma_period = settings['hma_period']
+        # Strategy Parameters (EMA Specific)
+        self.short_ema_period = settings['short_ema']
+        self.long_ema_period = settings['long_ema']
+        
+        # Trade Config
         self.sl_pct = settings['sl_percentage']
         self.tp_pct = settings['tp_percentage']
         self.square_off_time = settings['square_off_time']
@@ -43,29 +46,12 @@ class HMAStrategy:
         self.confirmation_count = 0
 
         # Initial Setup
-        log.info(f"[{self.symbol}] Initializing Strategy with Token: {self.token_id}")
+        log.info(f"[{self.symbol}] Initializing EMA Strategy ({self.short_ema_period}/{self.long_ema_period}) with Token: {self.token_id}")
         self._fetch_historical_data()
-
-    def _calculate_wma(self, series, period):
-        weights = np.arange(1, period + 1)
-        return series.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-
-    def _calculate_hma(self, series, period):
-        """Calculates Hull Moving Average"""
-        half_length = int(period / 2)
-        sqrt_length = int(int(period)**0.5)
-        
-        wma_half = self._calculate_wma(series, half_length)
-        wma_full = self._calculate_wma(series, period)
-        
-        raw_hma = (2 * wma_half) - wma_full
-        hma = self._calculate_wma(raw_hma, sqrt_length)
-        return hma
 
     def _fetch_historical_data(self):
         """
-        Fetches Historical (past days) + Intraday (today) to ensure continuous data
-        without hitting the 1000 candle limit or missing live candles.
+        Fetches Historical + Intraday data to build the HA candles and EMAs.
         """
         try:
             # 1. Interval Mapping
@@ -102,9 +88,9 @@ class HMAStrategy:
             # ---------------------------------------------------------
             log.info(f"[{self.symbol}] Fetching Intraday (Today)")
             
-            # Map Exchange String to ID for Intraday Endpoint (1-NSE, 4-BSE, etc.)
+            # Map Exchange String to ID for Intraday Endpoint
             exch_map = {"NSE": "1", "NFO": "2", "CDS": "3", "BSE": "4", "BFO": "5"}
-            exch_id = exch_map.get(self.exchange, "1") # Default to 1 (NSE)
+            exch_id = exch_map.get(self.exchange, "1") 
             
             intra_df = pd.DataFrame()
             try:
@@ -118,7 +104,7 @@ class HMAStrategy:
                 log.warning(f"[{self.symbol}] Intraday API failed (Market might be closed): {e}")
 
             # ---------------------------------------------------------
-            # Step C: Merge, Clean, and Calc HMA
+            # Step C: Merge, Clean, and Calc EMA
             # ---------------------------------------------------------
             if hist_df.empty and intra_df.empty:
                 log.warning(f"[{self.symbol}] No data found from either source.")
@@ -127,7 +113,7 @@ class HMAStrategy:
             # Concatenate
             full_df = pd.concat([hist_df, intra_df], ignore_index=True)
             
-            # Drop duplicates based on time (in case overlap occurred)
+            # Drop duplicates based on time
             full_df = full_df.drop_duplicates(subset='time', keep='last')
             full_df = full_df.sort_values('time').reset_index(drop=True)
             
@@ -140,16 +126,16 @@ class HMAStrategy:
             # 1. Convert to HA
             self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
 
-            # 2. Calculate HMA on HA_CLOSE
-            self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period).dropna().reset_index(drop=True)
+            # 2. Calculate EMAs on HA_CLOSE
+            self.data['short_ema'] = self.data['ha_close'].ewm(span=self.short_ema_period, adjust=False).mean()
+            self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()
 
-            # Save to self.data
-            
-            self.data.to_csv("output_debug.csv")  # For debugging purposes
+            # Save debug file
+            self.data.to_csv("output_debug_ema.csv") 
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]
-                log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Time: {last_row['time']} Last Close: {last_row['close']} HMA: {last_row['hma']:.2f}")
+                log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Last HA Close: {last_row['ha_close']:.2f} | Short EMA: {last_row['short_ema']:.2f} | Long EMA: {last_row['long_ema']:.2f}")
 
         except Exception as e:
             log.error(f"[{self.symbol}] Critical error in data fetch: {e}")
@@ -168,7 +154,6 @@ class HMAStrategy:
     def process_tick(self, tick_data):
         """
         Called from Main thread dispatcher.
-        tick_data format from SDK: {'token': 22, 'lp': '2500.00', ...}
         """
         try:
             ltp = float(tick_data.get('last_price', 0))
@@ -178,7 +163,6 @@ class HMAStrategy:
 
             # --- Candle Construction Logic ---
             if self.current_candle is None:
-                # Align time to nearest interval bucket
                 minute_bucket = (tick_time.minute // self.interval) * self.interval
                 start_time = tick_time.replace(minute=minute_bucket, second=0, microsecond=0)
                 self.current_candle = {
@@ -187,7 +171,6 @@ class HMAStrategy:
                     'is_closed': False
                 }
             else:
-                # Check if current candle interval has passed
                 next_candle_time = self.current_candle['time'] + datetime.timedelta(minutes=self.interval)
                 
                 if tick_time >= next_candle_time:
@@ -204,12 +187,10 @@ class HMAStrategy:
                         'is_closed': False
                     }
                 else:
-                    # Update current candle
                     self.current_candle['high'] = max(self.current_candle['high'], ltp)
                     self.current_candle['low'] = min(self.current_candle['low'], ltp)
                     self.current_candle['close'] = ltp
 
-            # Optional: Check Intra-candle stoploss here (Simulated BO)
             self._monitor_open_position(ltp)
 
         except Exception as e:
@@ -231,13 +212,14 @@ class HMAStrategy:
         # Append
         new_row = {
             'time': raw_candle['time'],
-            'open': raw_candle['open'], 'close': raw_candle['close'], # Keep raw for logging/orders
+            'open': raw_candle['open'], 'close': raw_candle['close'], 
             'ha_open': ha_open, 'ha_high': ha_high, 'ha_low': ha_low, 'ha_close': ha_close
         }
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
         
-        # Recalculate HMA on HA Close
-        self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
+        # Recalculate EMAs on HA Close
+        self.data['short_ema'] = self.data['ha_close'].ewm(span=self.short_ema_period, adjust=False).mean()
+        self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()
         
         self._analyze_signal()
 
@@ -247,19 +229,19 @@ class HMAStrategy:
         curr = self.data.iloc[-1]
         prev = self.data.iloc[-2]
         
-        if pd.isna(curr['hma']) or pd.isna(prev['hma']): return
+        if pd.isna(curr['short_ema']) or pd.isna(curr['long_ema']): return
 
         signal = None
         
-        # HMA Crossover Logic
-        # Buy: Price Crosses Above HMA
-        if prev['ha_close'] <= prev['hma'] and curr['ha_close'] > curr['hma']:
+        # EMA Crossover Logic (Short EMA crossing Long EMA)
+        # Buy: Short crosses ABOVE Long
+        if prev['short_ema'] <= prev['long_ema'] and curr['short_ema'] > curr['long_ema']:
             signal = "BUY"
-        # Sell: Price Crosses Below HMA
-        elif prev['ha_close'] >= prev['hma'] and curr['ha_close'] < curr['hma']:
+        # Sell: Short crosses BELOW Long
+        elif prev['short_ema'] >= prev['long_ema'] and curr['short_ema'] < curr['long_ema']:
             signal = "SELL"
             
-        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']} | HMA: {curr['hma']:.2f} | Raw Signal: {signal}")
+        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']:.2f} | ShortEMA: {curr['short_ema']:.2f} | LongEMA: {curr['long_ema']:.2f} | Signal: {signal}")
 
         # Confirmation Logic
         if signal:
@@ -269,14 +251,15 @@ class HMAStrategy:
                 log.info(f"[{self.symbol}] Signal {signal} detected. Waiting for {self.required_confirmations} confirmations.")
                 self.pending_signal = signal
                 self.confirmation_count = 0
-                return # Exit, wait for next candles
+                return 
 
         # Check Pending Confirmation
         if self.pending_signal:
             is_valid = False
-            if self.pending_signal == "BUY" and curr['ha_close'] > curr['hma']:
+            # Check if spread is holding
+            if self.pending_signal == "BUY" and curr['short_ema'] > curr['long_ema']:
                 is_valid = True
-            elif self.pending_signal == "SELL" and curr['ha_close'] < curr['hma']:
+            elif self.pending_signal == "SELL" and curr['short_ema'] < curr['long_ema']:
                 is_valid = True
             
             if is_valid:
@@ -297,13 +280,11 @@ class HMAStrategy:
         # If we have a position and get an opposite signal, Reverse
         if self.position == "LONG" and signal == "SELL":
             log.info(f"[{self.symbol}] Exiting LONG @ {price}")
-            # Exit existing
             self._place_order("SELL", self.quantity, price) 
             self.position = "FLAT"
 
         elif self.position == "SHORT" and signal == "BUY":
             log.info(f"[{self.symbol}] Exiting SHORT @ {price}")
-            # Exit existing
             self._place_order("BUY", self.quantity, price) 
             self.position = "FLAT"
             
@@ -318,7 +299,7 @@ class HMAStrategy:
         """
         max_retries = 3
         
-        # Ensure price is formatted to 2 decimal places (e.g., "100.50")
+        # Ensure price is formatted to 2 decimal places
         limit_price = f"{float(price):.2f}"
         
         for attempt in range(1, max_retries + 1):
@@ -330,14 +311,14 @@ class HMAStrategy:
                     _tradingsymbol=self.symbol,
                     _exchange=self.exchange,
                     _transaction_type=transaction_type,
-                    _order_type=self.order_type,         # <--- Changed to LIMIT
+                    _order_type=self.order_type,         
                     _quantity=qty,
                     _product=self.product_type,
                     _validity="DAY",
-                    _price=limit_price,          # <--- Pass the specific price
+                    _price=limit_price,          
                     _trigger_price="0",
                     _disclosed_quantity="0",
-                    _tag="mStock_HMA_Bot"
+                    _tag="mStock_EMA_Bot"
                 )
                 
                 resp_json = resp.json()
@@ -363,17 +344,7 @@ class HMAStrategy:
         return None
 
     def _monitor_open_position(self, ltp):
-        """
-        Simulated Bracket Order Logic (SL/TP)
-        """
         if self.position == "FLAT": return
-
-        # This logic requires knowing the average entry price.
-        # For a production bot, you should fetch the Order Book/Net Position 
-        # via API to get the exact entry price. 
-        # For this example, we assume entry at close of previous signal (simplified).
-        
-        # Real-world: Call self.api.get_net_position() here occasionally
         pass
 
     def check_eod(self):
