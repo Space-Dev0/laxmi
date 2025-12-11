@@ -16,3 +16,4 @@ mticker.log
 
 #Debug
 *.csv
+temp.*

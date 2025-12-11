@@ -79,7 +79,7 @@ class HMAStrategy:
             # ---------------------------------------------------------
             now = datetime.datetime.now()
             # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
-            start_date = now - datetime.timedelta(days=4) 
+            start_date = now - datetime.timedelta(days=2) 
             
             f_str = start_date.strftime("%Y-%m-%d")
             t_str = now.strftime("%Y-%m-%d")
@@ -141,7 +141,7 @@ class HMAStrategy:
             self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
 
             # 2. Calculate HMA on HA_CLOSE
-            self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period).dropna().reset_index(drop=True)
+            self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
 
             # Save to self.data
             
@@ -334,7 +334,7 @@ class HMAStrategy:
                     _quantity=qty,
                     _product=self.product_type,
                     _validity="DAY",
-                    _price=limit_price,          # <--- Pass the specific price
+                    _price= limit_price if self.order_type == "LIMIT" else "0",          
                     _trigger_price="0",
                     _disclosed_quantity="0",
                     _tag="mStock_HMA_Bot"

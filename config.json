@@ -7,7 +7,7 @@
     "strategy_settings": {
         "exchange": "NFO",
         "symbols": [
-            "INDIGO25DEC4500PE"
+            "SRF25DECFUT"
         ],
         "short_ema": 20,
         "long_ema": 30,
@@ -15,9 +15,9 @@
         "sl_percentage": 1.0,
         "tp_percentage": 2.0,
         "interval_minute": 1,
-        "quantity": 150,
+        "quantity": 200,
         "order_type": "MARKET",
-        "product_type": "LIMIT",
+        "product_type": "NRML",
         "square_off_time": "15:15",
         "confirmation_candles": 1
     }

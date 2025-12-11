@@ -194,29 +194,31 @@ def main():
     # 2. Login
     mconnect = MConnect()
     log.info("Logging in...")
-    # login_resp = mconnect.login(api_set['username'], api_set['password'])
+    login_resp = mconnect.login(api_set['username'], api_set['password'])
     
-    # # Check login status (Assuming 'status' key in json)
-    # if login_resp.json().get('status') != 'success':
-    #     log.critical(f"Login failed: {login_resp.json()}")
-    #     sys.exit(1)
+    # Check login status (Assuming 'status' key in json)
+    if login_resp.json().get('status') != 'success':
+        log.critical(f"Login failed: {login_resp.json()}")
+        sys.exit(1)
         
-    # # 3. Session Generation (OTP/TOTP)
-    # # The SDK example implies we need to provide OTP manually
-    # # If using TOTP, use verify_totp instead.
+    # 3. Session Generation (OTP/TOTP)
+    # The SDK example implies we need to provide OTP manually
+    # If using TOTP, use verify_totp instead.
     
-    # # Check if we need OTP or TOTP (Logic depends on user account settings)
-    # # Here we assume OTP input per the SDK example
-    # otp = input("Enter OTP sent to mobile: ")
-    # session_resp = mconnect.generate_session(api_set['api_key'], otp, "W")
+    # Check if we need OTP or TOTP (Logic depends on user account settings)
+    # Here we assume OTP input per the SDK example
+    otp = input("Enter OTP sent to mobile: ")
+    session_resp = mconnect.generate_session(api_set['api_key'], otp, "W")
     
-    # if session_resp.json().get('status') != 'success':
-    #     log.critical(f"Session Generation failed: {session_resp.json()}")
-    #     sys.exit(1)
+    if session_resp.json().get('status') != 'success':
+        log.critical(f"Session Generation failed: {session_resp.json()}")
+        sys.exit(1)
 
-    access_token = config['access_token']
-    mconnect.set_access_token(config['access_token'])
-    mconnect.set_api_key(api_set['api_key'])
+    access_token = session_resp.json().get('data', {}).get('access_token')
+
+    # access_token = config['access_token']
+    # mconnect.set_access_token(config['access_token'])
+    # mconnect.set_api_key(api_set['api_key'])
     
     log.info("Session Established.")
     

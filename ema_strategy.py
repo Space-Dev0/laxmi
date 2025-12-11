@@ -63,9 +63,9 @@ class EMAStrategy:
             # ---------------------------------------------------------
             # Step A: Get Historical Data (Yesterday and back)
             # ---------------------------------------------------------
-            now = datetime.datetime.now()
+            now = datetime.datetime.now()   
             # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
-            start_date = now - datetime.timedelta(days=4) 
+            start_date = now - datetime.timedelta(days=2) 
             
             f_str = start_date.strftime("%Y-%m-%d")
             t_str = now.strftime("%Y-%m-%d")
@@ -280,18 +280,21 @@ class EMAStrategy:
         # If we have a position and get an opposite signal, Reverse
         if self.position == "LONG" and signal == "SELL":
             log.info(f"[{self.symbol}] Exiting LONG @ {price}")
-            self._place_order("SELL", self.quantity, price) 
-            self.position = "FLAT"
+            resp = self._place_order("SELL", self.quantity, price)
+            if resp.get('status') == 'success': 
+                self.position = "FLAT"
 
         elif self.position == "SHORT" and signal == "BUY":
             log.info(f"[{self.symbol}] Exiting SHORT @ {price}")
-            self._place_order("BUY", self.quantity, price) 
-            self.position = "FLAT"
+            resp = self._place_order("BUY", self.quantity, price) 
+            if resp.get('status') == 'success': 
+                self.position = "FLAT"
             
         elif self.position == "FLAT":
             log.info(f"[{self.symbol}] Entry: Going {signal} @ {price}")
-            self._place_order(signal, self.quantity, price)
-            self.position = "LONG" if signal == "BUY" else "SHORT"
+            resp = self._place_order(signal, self.quantity, price)
+            if resp.get('status') == 'success': 
+                self.position = "LONG" if signal == "BUY" else "SHORT"
 
     def _place_order(self, transaction_type, qty, price=0):
         """
@@ -315,7 +318,7 @@ class EMAStrategy:
                     _quantity=qty,
                     _product=self.product_type,
                     _validity="DAY",
-                    _price=limit_price,          
+                    _price= limit_price if self.order_type == "LIMIT" else "0",          
                     _trigger_price="0",
                     _disclosed_quantity="0",
                     _tag="mStock_EMA_Bot"
