@@ -27,7 +27,8 @@ class HMAStrategy:
         self.int_token = int(self.token_id)      # Int 22 for websocket matching
         
         # Strategy Parameters
-        self.hma_period = settings['hma_period']
+        self.hma_short_period = settings['hma_short_period']
+        self.hma_long_period = settings['hma_long_period']
         self.sl_pct = settings['sl_percentage']
         self.tp_pct = settings['tp_percentage']
         self.square_off_time = settings['square_off_time']
@@ -125,7 +126,7 @@ class HMAStrategy:
                 return
 
             # Concatenate
-            full_df = pd.concat([hist_df, intra_df], ignore_index=True)
+            full_df = pd.concat([df.dropna(axis=1, how='all') for df in [hist_df, intra_df]], ignore_index=True)
             
             # Drop duplicates based on time (in case overlap occurred)
             full_df = full_df.drop_duplicates(subset='time', keep='last')
@@ -141,7 +142,8 @@ class HMAStrategy:
             self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
 
             # 2. Calculate HMA on HA_CLOSE
-            self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
+            self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
+            self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)
 
             # Save to self.data
             
@@ -149,7 +151,7 @@ class HMAStrategy:
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]
-                log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Time: {last_row['time']} Last Close: {last_row['close']} HMA: {last_row['hma']:.2f}")
+                log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Time: {last_row['time']} Last Close: {last_row['close']} Short HMA: {last_row['short_hma']:.2f} Long HMA: {last_row['long_hma']:.2f}")
 
         except Exception as e:
             log.error(f"[{self.symbol}] Critical error in data fetch: {e}")
@@ -237,8 +239,9 @@ class HMAStrategy:
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
         
         # Recalculate HMA on HA Close
-        self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
-        
+        self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
+        self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)
+
         self._analyze_signal()
 
     def _analyze_signal(self):
@@ -247,19 +250,19 @@ class HMAStrategy:
         curr = self.data.iloc[-1]
         prev = self.data.iloc[-2]
         
-        if pd.isna(curr['hma']) or pd.isna(prev['hma']): return
+        if pd.isna(curr['short_hma']) or pd.isna(prev['long_hma']) or pd.isna(curr['long_hma']) or pd.isna(prev['short_hma']): return
 
         signal = None
         
         # HMA Crossover Logic
-        # Buy: Price Crosses Above HMA
-        if prev['ha_close'] <= prev['hma'] and curr['ha_close'] > curr['hma']:
+        # Buy: Short HMA Crosses Above Long HMA
+        if prev['short_hma'] <= prev['long_hma'] and curr['short_hma'] > curr['long_hma']:
             signal = "BUY"
-        # Sell: Price Crosses Below HMA
-        elif prev['ha_close'] >= prev['hma'] and curr['ha_close'] < curr['hma']:
+        # Sell: Short HMA Crosses Below Long HMA
+        elif prev['short_hma'] >= prev['long_hma'] and curr['short_hma'] < curr['long_hma']:
             signal = "SELL"
             
-        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']} | HMA: {curr['hma']:.2f} | Raw Signal: {signal}")
+        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']} | Short HMA: {curr['short_hma']:.2f} | Long HMA: {curr['long_hma']:.2f} | Raw Signal: {signal}")
 
         # Confirmation Logic
         if signal:

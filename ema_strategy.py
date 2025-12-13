@@ -111,7 +111,7 @@ class EMAStrategy:
                 return
 
             # Concatenate
-            full_df = pd.concat([hist_df, intra_df], ignore_index=True)
+            full_df = pd.concat([df.dropna(axis=1, how='all') for df in [hist_df, intra_df]], ignore_index=True)
             
             # Drop duplicates based on time
             full_df = full_df.drop_duplicates(subset='time', keep='last')

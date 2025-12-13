@@ -171,7 +171,7 @@ def main():
     log.info("--- mStock HMA Bot Starting ---")
     
     print("\nSelect Strategy:")
-    print("1. HMA Price Crossover (Heikin Ashi)")
+    print("1. HMA Crossover (Heikin Ashi)")
     print("2. EMA Crossover (Heikin Ashi)")
     choice = input("Enter choice (1 or 2): ").strip()
     
