@@ -265,8 +265,11 @@ class EMAStrategy:
             if is_valid:
                 self.confirmation_count += 1
                 log.info(f"[{self.symbol}] Confirmation {self.confirmation_count}/{self.required_confirmations} OK.")
-                if self.confirmation_count >= self.required_confirmations:
+                if self.confirmation_count == self.required_confirmations:
                     self._execute_signal(self.pending_signal, curr['close'])
+                    self.pending_signal = None
+                    self.confirmation_count = 0
+                elif self.confirmation_count > self.required_confirmations  :
                     self.pending_signal = None
                     self.confirmation_count = 0
             else:
