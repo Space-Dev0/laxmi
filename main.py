@@ -7,6 +7,8 @@ import threading
 import time
 import csv
 import io
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Import mStock SDK
 from tradingapi_a.mconnect import MConnect
@@ -165,6 +167,32 @@ def strategy_monitor_loop():
             time.sleep(10)
 
 
+def wait_for_start_time(start_time_str):
+    """
+    Waits until the given start_time (HH:MM) if it's in the future (today).
+    """
+    if not start_time_str:
+        return
+
+    try:
+        now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
+        t = datetime.strptime(start_time_str, "%H:%M").time()
+        target = datetime.combine(now.date(), t)
+
+        if now < target:
+            sleep_seconds = (target - now).total_seconds()
+            log.info(f"Current time {now.strftime('%H:%M')}. Waiting until {start_time_str} ({int(sleep_seconds)}s)...")
+            time.sleep(sleep_seconds)
+            log.info("Start time reached. Resuming...")
+        else:
+            log.info(f"Current time is past start time {start_time_str}. Proceeding immediately.")
+
+    except ValueError as e:
+        log.error(f"Invalid start_time format '{start_time_str}': {e}. Expected HH:MM.")
+    except Exception as e:
+        log.error(f"Error in wait_for_start_time: {e}")
+
+
 # --- Main ---
 
 def main():
@@ -249,6 +277,11 @@ def main():
     if not STRATEGIES:
         log.critical("No strategies running. Exiting.")
         sys.exit(1)
+
+    # 5.5 Wait for Start Time
+    if 'start_time' in strat_set:
+        wait_for_start_time(strat_set['start_time'])
+
 
     # 6. Start Strategy Monitor in Background Thread
     # We move the loop here so the main thread is free for the WebSocket

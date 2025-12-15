@@ -19,6 +19,7 @@
         "quantity": 200,
         "order_type": "MARKET",
         "product_type": "NRML",
+        "start_time": "09:29",
         "square_off_time": "15:15",
         "confirmation_candles": 1
     }
