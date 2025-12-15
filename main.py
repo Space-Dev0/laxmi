@@ -104,7 +104,8 @@ def _parse_csv_for_symbols(file_path, symbols_set, exchange):
                 if curr_symbol in remaining_symbols and curr_exch == exchange:
                     token_map[curr_symbol] = {
                         'token': curr_token,
-                        'exchange': curr_exch
+                        'exchange': curr_exch,
+                        'lot_size': row[8] # Capture lot_size
                     }
                     remaining_symbols.remove(curr_symbol)
                     log.info(f"Mapped {curr_symbol} -> {curr_token}")
@@ -386,7 +387,32 @@ def main():
         instance_settings = defaults.copy()
         instance_settings.update(inst)
         
-        # Ensure 'symbol' is there (it is, from inst)
+        # Calculate Quantity if 'lots' is provided and 'quantity' is NOT in instance or defaults (or overridden)
+        # Actually, user said: "if quantity is availaible, use quantity if lots is availaible use quantity = lots * lot_size"
+        # This implies checking precedence.
+        
+        # We check if 'quantity' was explicitly set in the instance config.
+        # If not, and 'lots' is set, we calculate.
+        # The 'instance_settings' has the merged values.
+        
+        # Let's verify precedence logic:
+        # If 'quantity' key is in 'inst' -> Use it (Already merged)
+        # Else if 'lots' key is in 'inst' -> Calculate
+        # Else -> Use 'quantity' from defaults (Already merged)
+        
+        if 'quantity' in inst:
+             # Explicitly set in instance, use it
+             pass
+        elif 'lots' in inst:
+             # Use lots
+             try:
+                 lot_size = int(full_token_map[symbol].get('lot_size', 1))
+                 lots = int(inst['lots'])
+                 qty = lots * lot_size
+                 instance_settings['quantity'] = qty
+                 log.info(f"Calculated quantity {qty} for {symbol} (Lots: {lots}, LotSize: {lot_size})")
+             except Exception as e:
+                 log.error(f"Error calculating quantity from lots for {symbol}: {e}")
         
         try:
             strategy = StrategyClass(mconnect, full_token_map, **instance_settings)
@@ -404,9 +430,9 @@ def main():
 
     # 5.5 Wait for Start Time (Use global default)
     
-    # global_start_time = defaults.get('start_time')
-    # if global_start_time:
-    #      wait_for_start_time(global_start_time)
+    global_start_time = defaults.get('start_time')
+    if global_start_time:
+         wait_for_start_time(global_start_time)
 
 
     # 6. Start Strategy Monitor in Background Thread

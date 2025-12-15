@@ -13,7 +13,7 @@ defaults:
   sl_percentage: 1.0
   tp_percentage: 2.0
   interval_minute: 1
-  quantity: 1025
+  quantity: 1
   order_type: "MARKET"
   product_type: "NRML"
   start_time: "9:29"
@@ -22,7 +22,4 @@ defaults:
 
 instances:
   - symbol: "VBL25DECFUT"
-
-  - symbol: "NIFTY25DECFUT"
-    quantity: 75
-    interval_minute: 5
+    lots: 1
