@@ -255,7 +255,7 @@ def wait_for_start_time(start_time_str):
     try:
         now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
         t = datetime.strptime(start_time_str, "%H:%M").time()
-        target = datetime.combine(now.date(), t,tzinfo=ZoneInfo('Aisa/Kolkata'))
+        target = datetime.combine(now.date(), t,tzinfo=ZoneInfo('Asia/Kolkata'))
 
         if now < target:
             sleep_seconds = (target - now).total_seconds()
