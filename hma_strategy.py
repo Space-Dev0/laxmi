@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 import logging
 import time
-
+from zoneinfo import ZoneInfo
 # Configure Logger
 log = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class HMAStrategy:
             # ---------------------------------------------------------
             # Step A: Get Historical Data (Yesterday and back)
             # ---------------------------------------------------------
-            now = datetime.datetime.now()
+            now = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata'))
             # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
             start_date = now - datetime.timedelta(days=2) 
             
@@ -176,7 +176,7 @@ class HMAStrategy:
             ltp = float(tick_data.get('last_price', 0))
             if ltp == 0: return
 
-            tick_time = datetime.datetime.now()
+            tick_time = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata'))
 
             # --- Candle Construction Logic ---
             if self.current_candle is None:
@@ -262,7 +262,7 @@ class HMAStrategy:
         elif prev['short_hma'] >= prev['long_hma'] and curr['short_hma'] < curr['long_hma']:
             signal = "SELL"
             
-        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']} | Short HMA: {curr['short_hma']:.2f} | Long HMA: {curr['long_hma']:.2f} | Raw Signal: {signal}")
+        log.info(f"[{self.symbol}] Candle Closed: {curr['time'].strftime('%H:%M')} | HA Close: {curr['ha_close']:.2f} | Short HMA: {curr['short_hma']:.2f} | Long HMA: {curr['long_hma']:.2f} | Raw Signal: {signal}")
 
         # Confirmation Logic
         if signal:
@@ -381,7 +381,7 @@ class HMAStrategy:
 
     def check_eod(self):
         """Check End of Day Square off"""
-        now_str = datetime.datetime.now().strftime("%H:%M")
+        now_str = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata')).strftime("%H:%M")
         
         if now_str >= self.square_off_time and self.position != "FLAT":
             log.info(f"[{self.symbol}] EOD Reached. Squaring off.")
