@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 # Global Variables
 STRATEGIES = {} # Maps Token ID (int) -> Strategy Instance
 M_TICKER = None
-SESSION_FILE = "session_cache.json"
+SESSION_FILE = ".cache/session_cache.json"
 
 def load_config():
     try:
@@ -72,7 +72,7 @@ def load_session():
         saved_time = datetime.fromisoformat(data['timestamp'])
         age = datetime.now(tz=ZoneInfo("Asia/Kolkata")) - saved_time
         
-        if age < timedelta(hours=12) and saved_time.date == datetime.now(tz=ZoneInfo("Asia/Kolkata")).date():
+        if age < timedelta(hours=12) and saved_time.date() == datetime.now(tz=ZoneInfo("Asia/Kolkata")).date():
             log.info(f"Found valid session (Age: {age}).")
             return data['access_token']
         else:

@@ -7,18 +7,17 @@
     "strategy_settings": {
         "exchange": "NFO",
         "symbols": [
-            "NIFTY25D1626000CE",
-            "NIFTY25D1626000PE"
+            "VBL25DECFUT"
         ],
         "short_ema": 20,
         "long_ema": 30,
         "hma_short_period": 30,
         "hma_long_period": 50,
-        "hma_price_period": 35,
+        "hma_price_period": 30,
         "sl_percentage": 1.0,
         "tp_percentage": 2.0,
         "interval_minute": 1,
-        "quantity": 75,
+        "quantity": 1025,
         "order_type": "MARKET",
         "product_type": "NRML",
         "start_time": "9:29",

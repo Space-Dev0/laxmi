@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+#cache
+.cache/
+
 #Logs
 bot_execution.log 
 mconnect.log
