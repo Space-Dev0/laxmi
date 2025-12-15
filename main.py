@@ -7,7 +7,7 @@ import threading
 import time
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 # Import mStock SDK
@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 # Global Variables
 STRATEGIES = {} # Maps Token ID (int) -> Strategy Instance
 M_TICKER = None
+SESSION_FILE = "session_cache.json"
 
 def load_config():
     try:
@@ -41,6 +42,46 @@ def load_config():
     except Exception as e:
         log.critical(f"Config load error: {e}")
         sys.exit(1)
+
+def save_session(access_token):
+    """Saves the access token and current timestamp to a file."""
+    try:
+        data = {
+            "access_token": access_token,
+            "timestamp": datetime.now(tz=ZoneInfo("Asia/Kolkata")).isoformat()
+        }
+        with open(SESSION_FILE, 'w') as f:
+            json.dump(data, f)
+        log.info(f"Session saved to {SESSION_FILE}")
+    except Exception as e:
+        log.error(f"Failed to save session: {e}")
+
+def load_session():
+    """
+    Loads session from file. 
+    Returns access_token if file exists and is less than 12 hours old. 
+    Otherwise returns None.
+    """
+    if not os.path.exists(SESSION_FILE):
+        return None
+    
+    try:
+        with open(SESSION_FILE, 'r') as f:
+            data = json.load(f)
+            
+        saved_time = datetime.fromisoformat(data['timestamp'])
+        age = datetime.now(tz=ZoneInfo("Asia/Kolkata")) - saved_time
+        
+        if age < timedelta(hours=12) and saved_time.date == datetime.now(tz=ZoneInfo("Asia/Kolkata")).date():
+            log.info(f"Found valid session (Age: {age}).")
+            return data['access_token']
+        else:
+            log.info(f"Session expired (Age: {age}).")
+            return None
+            
+    except Exception as e:
+        log.error(f"Failed to load session: {e}")
+        return None
 
 def _parse_csv_for_symbols(file_path, symbols_set, exchange):
     """Helper to parse CSV file line-by-line and find symbols."""
@@ -270,24 +311,30 @@ def main():
         log.critical(f"Login failed: {login_resp.json()}")
         sys.exit(1)
         
-    # 3. Session Generation (OTP/TOTP)
-    # The SDK example implies we need to provide OTP manually
-    # If using TOTP, use verify_totp instead.
+    # 3. Session Generation (OTP/TOTP) OR Cache Restore
+    cached_token = load_session()
+    access_token = None
     
-    # Check if we need OTP or TOTP (Logic depends on user account settings)
-    # Here we assume OTP input per the SDK example
-    otp = input("Enter OTP sent to mobile: ")
-    session_resp = mconnect.generate_session(api_set['api_key'], otp, "W")
-    
-    if session_resp.json().get('status') != 'success':
-        log.critical(f"Session Generation failed: {session_resp.json()}")
-        sys.exit(1)
+    if cached_token:
+        # Reuse Session
+        log.info("Restoring session from cache...")
+        mconnect.set_access_token(cached_token)
+        mconnect.set_api_key(api_set['api_key'])
+        access_token = cached_token
+        
+    else:
+        # New Session via OTP
+        otp = input("Enter OTP sent to mobile: ")
+        session_resp = mconnect.generate_session(api_set['api_key'], otp, "W")
+        
+        if session_resp.json().get('status') != 'success':
+            log.critical(f"Session Generation failed: {session_resp.json()}")
+            sys.exit(1)
 
-    access_token = session_resp.json().get('data', {}).get('access_token')
-
-    # access_token = config['access_token']
-    # mconnect.set_access_token(config['access_token'])
-    # mconnect.set_api_key(api_set['api_key'])
+        access_token = session_resp.json().get('data', {}).get('access_token')
+        
+        # Save Session
+        save_session(access_token)
     
     log.info("Session Established.")
     
