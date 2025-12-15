@@ -138,17 +138,33 @@ def on_close(ws, code, reason):
 def on_error(ws, error):
     log.error(f"WebSocket Error: {error}")
 
+def on_reconnect(ws, attempts_count):
+    log.warning(f"WebSocket Reconnecting... Attempt: {attempts_count}")
+
+def on_noreconnect(ws):
+    log.critical("WebSocket Max Reconnection Attempts Reached. Exiting.")
+    sys.exit(1)
+
 def start_websocket_thread(api_key, access_token):
     global M_TICKER
     # Defined in sdk config usually, or hardcoded based on doc
     WS_URL = "wss://ws.mstock.trade" 
     
-    M_TICKER = MTicker(api_key, access_token, WS_URL)
+    # Run blocking connect in this thread
+    # Enabling reconnection with generous limits
+    # reconnect_max_tries=300 (approx 300 * 60s max delay could cover hours, but delay ramps up)
+    # reconnect_max_delay=60 (max wait between retries is 60s)
+    M_TICKER = MTicker(api_key, access_token, WS_URL, 
+                       reconnect=True, 
+                       reconnect_max_tries=300, 
+                       reconnect_max_delay=60)
     
     M_TICKER.on_ticks = on_ticks
     M_TICKER.on_connect = on_connect
     M_TICKER.on_close = on_close
     M_TICKER.on_error = on_error
+    M_TICKER.on_reconnect = on_reconnect
+    M_TICKER.on_noreconnect = on_noreconnect
     
     # Run blocking connect in this thread
     M_TICKER.connect()
