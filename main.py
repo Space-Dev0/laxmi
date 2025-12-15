@@ -50,6 +50,7 @@ def save_session(access_token):
             "access_token": access_token,
             "timestamp": datetime.now(tz=ZoneInfo("Asia/Kolkata")).isoformat()
         }
+        os.makedirs(".cache", exist_ok=True)
         with open(SESSION_FILE, 'w') as f:
             json.dump(data, f)
         log.info(f"Session saved to {SESSION_FILE}")
