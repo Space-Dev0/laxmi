@@ -1,0 +1,28 @@
+api_settings:
+  api_key: "ZDZJJlh9L2Nrqs/z/mnsQxJGY1+X/EsQRs+sQjhj+Bw="
+  username: "7007504878"
+  password: "Ganpati@421"
+
+defaults:
+  exchange: "NFO"
+  short_ema: 20
+  long_ema: 30
+  hma_short_period: 30
+  hma_long_period: 50
+  hma_price_period: 30
+  sl_percentage: 1.0
+  tp_percentage: 2.0
+  interval_minute: 1
+  quantity: 1025
+  order_type: "MARKET"
+  product_type: "NRML"
+  start_time: "9:29"
+  square_off_time: "15:15"
+  confirmation_candles: 0
+
+instances:
+  - symbol: "VBL25DECFUT"
+
+  - symbol: "NIFTY25DECFUT"
+    quantity: 75
+    interval_minute: 5

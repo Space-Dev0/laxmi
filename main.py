@@ -2,6 +2,7 @@ from logging import config
 import sys
 import os
 import json
+import yaml
 import logging
 import threading
 import time
@@ -37,8 +38,8 @@ SESSION_FILE = ".cache/session_cache.json"
 
 def load_config():
     try:
-        with open('config.json', 'r') as f:
-            return json.load(f)
+        with open('config.yaml', 'r') as f:
+            return yaml.safe_load(f)
     except Exception as e:
         log.critical(f"Config load error: {e}")
         sys.exit(1)
@@ -277,31 +278,16 @@ def wait_for_start_time(start_time_str):
 def main():
     log.info("--- mStock HMA Bot Starting ---")
     
-    print("\nSelect Strategy:")
-    print("1. HMA Crossover (Heikin Ashi)")
-    print("2. EMA Crossover (Heikin Ashi)")
-    print("3. HMA Price Crossover (Heikin Ashi)")
-    choice = input("Enter choice (1,2 or 3): ").strip()
-    
-    StrategyClass = None
-    if choice == '1':
-        StrategyClass = HMAStrategy
-        log.info("Selected: HMA Strategy")
-    elif choice == '2':
-        StrategyClass = EMAStrategy
-        log.info("Selected: EMA Strategy")
-    elif choice == '3':
-        StrategyClass = HMAPriceStrategy
-        log.info("Selected: HMA Price Strategy")
-    else:
-        log.critical("Invalid choice. Exiting.")
-        sys.exit(1)
-
     # 1. Load Config
     config = load_config()
     api_set = config['api_settings']
-    strat_set = config['strategy_settings']
+    defaults = config.get('defaults', {})
+    instances = config.get('instances', [])
     
+    if not instances:
+        log.critical("No instances defined in config.yaml")
+        sys.exit(1)
+
     # 2. Login
     mconnect = MConnect()
     log.info("Logging in...")
@@ -339,37 +325,88 @@ def main():
     
     log.info("Session Established.")
     
-    # 4. Map Tokens
-    token_map = get_token_map(mconnect, strat_set['symbols'], strat_set['exchange'])
+    # 4. Map Tokens (Group by Exchange to optimize)
+    # We first group symbols by exchange to batch calls to get_token_map if needed, 
+    # or just handle correctly if get_token_map can handle one exchange at a time.
     
-    if len(token_map) != len(strat_set['symbols']):
-        log.warning("Some symbols could not be mapped. Check spelling.")
-    
+    # Helper to get exchange for an instance
+    def get_exch(inst):
+        return inst.get('exchange', defaults.get('exchange', 'NFO'))
+
+    # Group symbols by exchange
+    exchange_buckets = {}
+    for inst in instances:
+        exch = get_exch(inst)
+        sym = inst['symbol']
+        if exch not in exchange_buckets:
+            exchange_buckets[exch] = []
+        exchange_buckets[exch].append(sym)
+
+    full_token_map = {}
+    for exch, sym_list in exchange_buckets.items():
+        log.info(f"Mapping tokens for exchange: {exch}")
+        partial_map = get_token_map(mconnect, sym_list, exch)
+        full_token_map.update(partial_map)
+        
+        if len(partial_map) != len(sym_list):
+            log.warning(f"Some symbols for {exch} could not be mapped.")
+
     # 5. Initialize Strategies    
-    for symbol in strat_set['symbols']:
-        if symbol in token_map:
-            try:
-                # Create a copy of settings and inject the specific 'symbol'
-                instance_settings = strat_set.copy()
-                instance_settings['symbol'] = symbol
-                
-                # Now pass instance_settings which contains the 'symbol' key
-                strategy = StrategyClass(mconnect, token_map, **instance_settings)
-                
-                # Websocket uses Token as Int for routing
-                t_id = int(token_map[symbol]['token'])
-                STRATEGIES[t_id] = strategy
-                
-                log.info(f"Strategy initialized for {symbol} (Token: {t_id})")
-            except Exception as e:
-                log.error(f"Failed to init strategy for {symbol}: {e}", exc_info=True)
+    print("\n--- Strategy Selection ---")
+    for inst in instances:
+        symbol = inst['symbol']
+        
+        if symbol not in full_token_map:
+            log.error(f"Skipping {symbol}: Could not map to token.")
+            continue
+            
+        print(f"\nConfiguring instance for: {symbol}")
+        print("1. HMA Crossover (Heikin Ashi)")
+        print("2. EMA Crossover (Heikin Ashi)")
+        print("3. HMA Price Crossover (Heikin Ashi)")
+        choice = input(f"Select Strategy for {symbol} (1/2/3): ").strip()
+        
+        StrategyClass = None
+        s_type_name = ""
+        if choice == '1':
+            StrategyClass = HMAStrategy
+            s_type_name = "HMA"
+        elif choice == '2':
+            StrategyClass = EMAStrategy
+            s_type_name = "EMA"
+        elif choice == '3':
+            StrategyClass = HMAPriceStrategy
+            s_type_name = "HMA_Price"
+        else:
+            log.error(f"Invalid choice '{choice}' for {symbol}. Skipping.")
+            continue
+            
+        # Merge settings: Defaults -> Instance
+        # We start with defaults, then update with instance specific keys
+        instance_settings = defaults.copy()
+        instance_settings.update(inst)
+        
+        # Ensure 'symbol' is there (it is, from inst)
+        
+        try:
+            strategy = StrategyClass(mconnect, full_token_map, **instance_settings)
+            
+            t_id = int(full_token_map[symbol]['token'])
+            STRATEGIES[t_id] = strategy
+            
+            log.info(f"Initialized {s_type_name} Strategy for {symbol} (Token: {t_id})")
+        except Exception as e:
+            log.error(f"Failed to init strategy for {symbol}: {e}", exc_info=True)
+
     if not STRATEGIES:
         log.critical("No strategies running. Exiting.")
         sys.exit(1)
 
-    # 5.5 Wait for Start Time
-    if 'start_time' in strat_set:
-        wait_for_start_time(strat_set['start_time'])
+    # 5.5 Wait for Start Time (Use global default)
+    
+    # global_start_time = defaults.get('start_time')
+    # if global_start_time:
+    #      wait_for_start_time(global_start_time)
 
 
     # 6. Start Strategy Monitor in Background Thread
