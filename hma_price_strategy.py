@@ -236,6 +236,12 @@ class HMAPriceStrategy:
         }
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
         
+        # --- RAM Optimization: Truncate Data ---
+        keep_size = self.hma_period * 2 + 10
+        if len(self.data) > keep_size:
+            self.data = self.data.tail(keep_size).copy().reset_index(drop=True)
+        # ---------------------------------------
+
         # Recalculate HMA on HA Close
         self.data['hma'] = self._calculate_hma(self.data['ha_close'], self.hma_period)
 

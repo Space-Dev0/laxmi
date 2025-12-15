@@ -238,6 +238,14 @@ class HMAStrategy:
         }
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
         
+        # --- RAM Optimization: Truncate Data ---
+        # Keep enough candles for the longest period calculation + buffer
+        # HMA needs period + sqrt(period) effectively, so 2x period is plenty safe.
+        keep_size = max(self.hma_short_period, self.hma_long_period) * 2 + 10
+        if len(self.data) > keep_size:
+            self.data = self.data.tail(keep_size).copy().reset_index(drop=True)
+        # ---------------------------------------
+
         # Recalculate HMA on HA Close
         self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
         self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)

@@ -217,6 +217,12 @@ class EMAStrategy:
         }
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
         
+        # --- RAM Optimization: Truncate Data ---
+        keep_size = max(self.short_ema_period, self.long_ema_period) * 2 + 10
+        if len(self.data) > keep_size:
+            self.data = self.data.tail(keep_size).copy().reset_index(drop=True)
+        # ---------------------------------------
+
         # Recalculate EMAs on HA Close
         self.data['short_ema'] = self.data['ha_close'].ewm(span=self.short_ema_period, adjust=False).mean()
         self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()

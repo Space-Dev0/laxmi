@@ -42,58 +42,78 @@ def load_config():
         log.critical(f"Config load error: {e}")
         sys.exit(1)
 
+def _parse_csv_for_symbols(file_path, symbols_set, exchange):
+    """Helper to parse CSV file line-by-line and find symbols."""
+    token_map = {}
+    remaining_symbols = symbols_set.copy()
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if not row or len(row) < 3: continue
+                
+                # Assuming: Token=Column 0, Symbol=Column 2, Exchange=Last Column
+                curr_token = row[0]
+                curr_symbol = row[2]
+                curr_exch = row[-1]
+                
+                if curr_symbol in remaining_symbols and curr_exch == exchange:
+                    token_map[curr_symbol] = {
+                        'token': curr_token,
+                        'exchange': curr_exch
+                    }
+                    remaining_symbols.remove(curr_symbol)
+                    log.info(f"Mapped {curr_symbol} -> {curr_token}")
+                
+                if not remaining_symbols:
+                    break
+    except Exception as e:
+        log.error(f"Error parsing local CSV: {e}")
+        return {}, symbols_set
+        
+    return token_map, remaining_symbols
+
 def get_token_map(mconnect, symbols, exchange):
     """
-    Downloads the master csv and filters for the symbols in config.
-    Returns: {'SBIN': {'token': '3045', 'exchange': 'NSE'}, ...}
+    Tries to map symbols using local cache first, then fails over to API.
     """
+    file_name = "output.csv"
+    symbols_set = set(symbols)
+    token_map = {}
+    
+    # 1. Try Local File
+    if os.path.exists(file_name):
+        log.info("Checking local instrument master...")
+        found_map, missing_symbols = _parse_csv_for_symbols(file_name, symbols_set, exchange)
+        token_map.update(found_map)
+        
+        if not missing_symbols:
+            log.info("All symbols found in local cache.")
+            return token_map
+        else:
+            log.warning(f"Symbols not found locally: {missing_symbols}. Refreshing Master...")
+    
+    # 2. Download and Parse (if needed)
     log.info("Downloading Instrument Master...")
     try:
-        # mStock returns raw CSV string
-        csv_response = mconnect.get_instruments() 
-        csv_data = csv_response.decode('utf-8')
-        file_name = "output.csv"
-
-        with open(file_name, 'w', newline='') as csvfile:
-            csvfile.write(csv_data)
-
-        token_map = {}
-        # Parse CSV
-        # Structure roughly: token, ?, tradingsymbol, ?, ?, ?, ?, ...
-        # Based on docs: token is usually 1st col, symbol 3rd, exchange last
+        # Stream download to file to avoid memory spike
+        csv_response = mconnect.get_instruments()
+        # mConnect likely returns bytes. If it's a huge request, we ideally want a stream=True request 
+        # but the SDK might returns all-at-once. We write it to disk immediately.
         
-        reader = csv.reader(io.StringIO(csv_data), delimiter=",")
-        
-        # We need to find tokens for our symbols
-        symbols_set = set(symbols)
-        
-        for row in reader:
-            if not row: continue
+        # If the SDK returns a pure bytes object properly, we just write it.
+        with open(file_name, 'wb') as csvfile:
+            csvfile.write(csv_response)
             
-            # Note: You might need to adjust indices based on the actual CSV columns 
-            # returned by mStock current version. 
-            # Assuming: Token=Column 0, Symbol=Column 2, Exchange=Last Column
-            
-            # Example SDK response structure from docs:
-            # 1,1,GOLDSTAR,GOLDSTAR POWER LIMITED,,,,,1,SM,SM,NSE
-            
-            if len(row) < 3: continue
-            
-            curr_token = row[0]
-            curr_symbol = row[2]
-            curr_exch = row[-1] # Exchange is usually at the end
-            
-            if curr_symbol in symbols_set and curr_exch == exchange:
-                token_map[curr_symbol] = {
-                    'token': curr_token,
-                    'exchange': curr_exch
-                }
-                log.info(f"Mapped {curr_symbol} -> {curr_token}")
+        # 3. Parse again
+        found_map, missing_symbols = _parse_csv_for_symbols(file_name, symbols_set, exchange)
+        token_map.update(found_map)
         
         return token_map
         
     except Exception as e:
-        log.critical(f"Failed to parse Instrument Master: {e}")
+        log.critical(f"Failed to fetch/parse Instrument Master: {e}")
         sys.exit(1)
 
 # --- WebSocket Callbacks ---
