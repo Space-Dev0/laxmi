@@ -131,7 +131,7 @@ class EMAStrategy:
             self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()
 
             # Save debug file
-            self.data.to_csv("output_debug_ema.csv") 
+            # self.data.to_csv("output_debug_ema.csv") 
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]

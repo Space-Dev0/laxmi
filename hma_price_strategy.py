@@ -145,7 +145,7 @@ class HMAPriceStrategy:
 
             # Save to self.data
             
-            self.data.to_csv("output_debug.csv")  # For debugging purposes
+            # self.data.to_csv("output_debug.csv")  # For debugging purposes
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]

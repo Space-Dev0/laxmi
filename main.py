@@ -78,7 +78,7 @@ def get_token_map(mconnect, symbols, exchange):
     """
     Tries to map symbols using local cache first, then fails over to API.
     """
-    file_name = "output.csv"
+    file_name = "instrument_master.csv"
     symbols_set = set(symbols)
     token_map = {}
     
