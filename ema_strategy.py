@@ -294,19 +294,19 @@ class EMAStrategy:
         if self.position == "LONG" and signal == "SELL":
             log.info(f"[{self.symbol}] Exiting LONG @ {price}")
             resp = self._place_order("SELL", self.quantity, price)
-            if resp.get('status') == 'success': 
+            if resp and resp.get('status') == 'success': 
                 self.position = "FLAT"
 
         elif self.position == "SHORT" and signal == "BUY":
             log.info(f"[{self.symbol}] Exiting SHORT @ {price}")
             resp = self._place_order("BUY", self.quantity, price) 
-            if resp.get('status') == 'success': 
+            if resp and resp.get('status') == 'success': 
                 self.position = "FLAT"
             
         elif self.position == "FLAT":
             log.info(f"[{self.symbol}] Entry: Going {signal} @ {price}")
             resp = self._place_order(signal, self.quantity, price)
-            if resp.get('status') == 'success': 
+            if resp and resp.get('status') == 'success': 
                 self.position = "LONG" if signal == "BUY" else "SHORT"
 
     def _place_order(self, transaction_type, qty, price=0):

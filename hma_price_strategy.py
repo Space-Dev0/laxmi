@@ -308,19 +308,22 @@ class HMAPriceStrategy:
         if self.position == "LONG" and signal == "SELL":
             log.info(f"[{self.symbol}] Exiting LONG @ {price}")
             # Exit existing
-            self._place_order("SELL", self.quantity, price) 
-            self.position = "FLAT"
+            resp = self._place_order("SELL", self.quantity, price) 
+            if resp and resp.get('status') == 'success':
+                self.position = "FLAT"
 
         elif self.position == "SHORT" and signal == "BUY":
             log.info(f"[{self.symbol}] Exiting SHORT @ {price}")
             # Exit existing
-            self._place_order("BUY", self.quantity, price) 
-            self.position = "FLAT"
+            resp = self._place_order("BUY", self.quantity, price) 
+            if resp and resp.get('status') == 'success':
+                self.position = "FLAT"
             
         elif self.position == "FLAT":
             log.info(f"[{self.symbol}] Entry: Going {signal} @ {price}")
-            self._place_order(signal, self.quantity, price)
-            self.position = "LONG" if signal == "BUY" else "SHORT"
+            resp = self._place_order(signal, self.quantity, price)
+            if resp and resp.get('status') == 'success':
+                self.position = "LONG" if signal == "BUY" else "SHORT"
 
     def _place_order(self, transaction_type, qty, price=0):
         """
