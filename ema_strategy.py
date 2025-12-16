@@ -47,6 +47,10 @@ class EMAStrategy:
 
         # Initial Setup
         log.info(f"[{self.symbol}] Initializing EMA Strategy ({self.short_ema_period}/{self.long_ema_period}) with Token: {self.token_id}")
+        # self._fetch_historical_data() # Moved to explicit call
+
+    def initialize_data(self):
+        """Fetches initial data. Should be called after start time is reached."""
         self._fetch_historical_data()
 
     def _fetch_historical_data(self):
@@ -334,6 +338,14 @@ class EMAStrategy:
                 )
                 
                 resp_json = resp.json()
+
+                # Handle list response (some APIs return [{...}])
+                if isinstance(resp_json, list):
+                    if len(resp_json) > 0:
+                        resp_json = resp_json[0]
+                    else:
+                        log.error(f"[{self.symbol}] Received empty list response from API.")
+                        return None
                 
                 # Check API success status
                 if resp_json.get('status') == 'success':

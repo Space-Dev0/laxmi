@@ -434,6 +434,12 @@ def main():
     if global_start_time:
          wait_for_start_time(global_start_time)
 
+    # 5.6 Initialize Data for Strategies (Late Fetching)
+    log.info("Fetching Historical Data for all strategies...")
+    for strat in STRATEGIES.values():
+        strat.initialize_data()
+
+
 
     # 6. Start Strategy Monitor in Background Thread
     # We move the loop here so the main thread is free for the WebSocket
