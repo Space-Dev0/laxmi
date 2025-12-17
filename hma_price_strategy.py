@@ -57,14 +57,14 @@ class HMAPriceStrategy:
     def _calculate_hma(self, series, period):
         """Calculates Hull Moving Average"""
         half_length = int(period / 2)
-        sqrt_length = int(int(period)**0.5)
+        sqrt_length = int(round(period**0.5))
         
         wma_half = self._calculate_wma(series, half_length)
         wma_full = self._calculate_wma(series, period)
         
         raw_hma = (2 * wma_half) - wma_full
         hma = self._calculate_wma(raw_hma, sqrt_length)
-        return hma
+        return hma.round(2)
 
     def _fetch_historical_data(self):
         """
@@ -141,6 +141,9 @@ class HMAPriceStrategy:
 
             self.data = full_df.dropna().reset_index(drop=True)
 
+            # Filter out zero volume candles (no trades)
+            self.data = self.data[self.data['volume'] > 0].reset_index(drop=True)
+
             # 1. Convert to HA
             self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
 
@@ -149,7 +152,7 @@ class HMAPriceStrategy:
 
             # Save to self.data
             
-            # self.data.to_csv("output_debug.csv")  # For debugging purposes
+            self.data.to_csv("output_debug.csv")  # For debugging purposes
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]
@@ -167,6 +170,11 @@ class HMAPriceStrategy:
         ha_df['ha_open'] = ha_open
         ha_df['ha_high'] = ha_df[['high', 'ha_open', 'ha_close']].max(axis=1)
         ha_df['ha_low'] = ha_df[['low', 'ha_open', 'ha_close']].min(axis=1)
+        
+        # Round to 2 decimal places
+        cols = ['ha_open', 'ha_high', 'ha_low', 'ha_close']
+        ha_df[cols] = ha_df[cols].round(2)
+        
         return ha_df
     
     def process_tick(self, tick_data):
@@ -231,6 +239,12 @@ class HMAPriceStrategy:
 
         ha_high = max(raw_candle['high'], ha_open, ha_close)
         ha_low = min(raw_candle['low'], ha_open, ha_close)
+
+        # Round live HA values to 2 decimals
+        ha_open = round(ha_open, 2)
+        ha_close = round(ha_close, 2)
+        ha_high = round(ha_high, 2)
+        ha_low = round(ha_low, 2)
 
         # Append
         new_row = {

@@ -53,9 +53,13 @@ class EMAStrategy:
         """Fetches initial data. Should be called after start time is reached."""
         self._fetch_historical_data()
 
+    def _calculate_ema(self, series, period):
+        return series.ewm(span=period, adjust=False).mean().round(2)
+
     def _fetch_historical_data(self):
         """
-        Fetches Historical + Intraday data to build the HA candles and EMAs.
+        Fetches Historical (past days) + Intraday (today) to ensure continuous data
+        without hitting the 1000 candle limit or missing live candles.
         """
         try:
             # 1. Interval Mapping
@@ -92,9 +96,9 @@ class EMAStrategy:
             # ---------------------------------------------------------
             log.info(f"[{self.symbol}] Fetching Intraday (Today)")
             
-            # Map Exchange String to ID for Intraday Endpoint
+            # Map Exchange String to ID for Intraday Endpoint (1-NSE, 4-BSE, etc.)
             exch_map = {"NSE": "1", "NFO": "2", "CDS": "3", "BSE": "4", "BFO": "5"}
-            exch_id = exch_map.get(self.exchange, "1") 
+            exch_id = exch_map.get(self.exchange, "1") # Default to 1 (NSE)
             
             intra_df = pd.DataFrame()
             try:
@@ -117,7 +121,7 @@ class EMAStrategy:
             # Concatenate
             full_df = pd.concat([df.dropna(axis=1, how='all') for df in [hist_df, intra_df]], ignore_index=True)
             
-            # Drop duplicates based on time
+            # Drop duplicates based on time (in case overlap occurred)
             full_df = full_df.drop_duplicates(subset='time', keep='last')
             full_df = full_df.sort_values('time').reset_index(drop=True)
             
@@ -126,16 +130,20 @@ class EMAStrategy:
             full_df[cols] = full_df[cols].apply(pd.to_numeric)
 
             self.data = full_df.dropna().reset_index(drop=True)
+            
+            # Filter out zero volume candles (no trades)
+            self.data = self.data[self.data['volume'] > 0].reset_index(drop=True)
 
             # 1. Convert to HA
             self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
 
-            # 2. Calculate EMAs on HA_CLOSE
-            self.data['short_ema'] = self.data['ha_close'].ewm(span=self.short_ema_period, adjust=False).mean()
-            self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()
+            # 2. Calculate EMA on HA_CLOSE
+            self.data['short_ema'] = self._calculate_ema(self.data['ha_close'], self.short_ema_period)
+            self.data['long_ema'] = self._calculate_ema(self.data['ha_close'], self.long_ema_period)
 
-            # Save debug file
-            # self.data.to_csv("output_debug_ema.csv") 
+            # Save to self.data
+            
+            # self.data.to_csv("output_debug.csv")  # For debugging purposes
 
             if not self.data.empty:
                 last_row = self.data.iloc[-1]
@@ -153,11 +161,17 @@ class EMAStrategy:
         ha_df['ha_open'] = ha_open
         ha_df['ha_high'] = ha_df[['high', 'ha_open', 'ha_close']].max(axis=1)
         ha_df['ha_low'] = ha_df[['low', 'ha_open', 'ha_close']].min(axis=1)
+        
+        # Round to 2 decimal places
+        cols = ['ha_open', 'ha_high', 'ha_low', 'ha_close']
+        ha_df[cols] = ha_df[cols].round(2)
+        
         return ha_df
     
     def process_tick(self, tick_data):
         """
         Called from Main thread dispatcher.
+        tick_data format from SDK: {'token': 22, 'lp': '2500.00', ...}
         """
         try:
             ltp = float(tick_data.get('last_price', 0))
@@ -167,6 +181,7 @@ class EMAStrategy:
 
             # --- Candle Construction Logic ---
             if self.current_candle is None:
+                # Align time to nearest interval bucket
                 minute_bucket = (tick_time.minute // self.interval) * self.interval
                 start_time = tick_time.replace(minute=minute_bucket, second=0, microsecond=0)
                 self.current_candle = {
@@ -175,6 +190,7 @@ class EMAStrategy:
                     'is_closed': False
                 }
             else:
+                # Check if current candle interval has passed
                 next_candle_time = self.current_candle['time'] + datetime.timedelta(minutes=self.interval)
                 
                 if tick_time >= next_candle_time:
@@ -191,10 +207,12 @@ class EMAStrategy:
                         'is_closed': False
                     }
                 else:
+                    # Update current candle
                     self.current_candle['high'] = max(self.current_candle['high'], ltp)
                     self.current_candle['low'] = min(self.current_candle['low'], ltp)
                     self.current_candle['close'] = ltp
 
+            # Optional: Check Intra-candle stoploss here (Simulated BO)
             self._monitor_open_position(ltp)
 
         except Exception as e:
@@ -213,10 +231,16 @@ class EMAStrategy:
         ha_high = max(raw_candle['high'], ha_open, ha_close)
         ha_low = min(raw_candle['low'], ha_open, ha_close)
 
+        # Round live HA values to 2 decimals
+        ha_open = round(ha_open, 2)
+        ha_close = round(ha_close, 2)
+        ha_high = round(ha_high, 2)
+        ha_low = round(ha_low, 2)
+
         # Append
         new_row = {
             'time': raw_candle['time'],
-            'open': raw_candle['open'], 'close': raw_candle['close'], 
+            'open': raw_candle['open'], 'close': raw_candle['close'], # Keep raw for logging/orders
             'ha_open': ha_open, 'ha_high': ha_high, 'ha_low': ha_low, 'ha_close': ha_close
         }
         self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
@@ -228,8 +252,8 @@ class EMAStrategy:
         # ---------------------------------------
 
         # Recalculate EMAs on HA Close
-        self.data['short_ema'] = self.data['ha_close'].ewm(span=self.short_ema_period, adjust=False).mean()
-        self.data['long_ema'] = self.data['ha_close'].ewm(span=self.long_ema_period, adjust=False).mean()
+        self.data['short_ema'] = self._calculate_ema(self.data['ha_close'], self.short_ema_period)
+        self.data['long_ema'] = self._calculate_ema(self.data['ha_close'], self.long_ema_period)
         
         self._analyze_signal()
 

@@ -292,12 +292,6 @@ def main():
     # 2. Login
     mconnect = MConnect()
     log.info("Logging in...")
-    login_resp = mconnect.login(api_set['username'], api_set['password'])
-    
-    # Check login status (Assuming 'status' key in json)
-    if login_resp.json().get('status') != 'success':
-        log.critical(f"Login failed: {login_resp.json()}")
-        sys.exit(1)
         
     # 3. Session Generation (OTP/TOTP) OR Cache Restore
     cached_token = load_session()
@@ -311,6 +305,14 @@ def main():
         access_token = cached_token
         
     else:
+
+        login_resp = mconnect.login(api_set['username'], api_set['password'])
+        
+        # Check login status (Assuming 'status' key in json)
+        if login_resp.json().get('status') != 'success':
+            log.critical(f"Login failed: {login_resp.json()}")
+            sys.exit(1)
+        
         # New Session via OTP
         otp = input("Enter OTP sent to mobile: ")
         session_resp = mconnect.generate_session(api_set['api_key'], otp, "W")
