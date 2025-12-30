@@ -14,9 +14,13 @@ defaults:
   hma_short_period: 30
   hma_long_period: 50
   
-  #For HMA-Price Crossover
-  hma_price_period: 30
+  # #For HMA-Price Crossover
+  # hma_price_period: 30
   
+  #For HMA-EMA crossover
+  hma_period: 20
+  ema_period: 5
+
   sl_percentage: 1.0
   tp_percentage: 2.0
   interval_minute: 1

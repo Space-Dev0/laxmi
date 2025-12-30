@@ -290,10 +290,9 @@ class EMAStrategy:
         # Check Pending Confirmation
         if self.pending_signal:
             is_valid = False
-            # Check if spread is holding
-            if self.pending_signal == "BUY" and curr['short_ema'] > curr['long_ema']:
+            if self.pending_signal == "BUY" and curr['ha_close'] > prev['ha_close']:
                 is_valid = True
-            elif self.pending_signal == "SELL" and curr['short_ema'] < curr['long_ema']:
+            elif self.pending_signal == "SELL" and curr['ha_close'] < prev['ha_close']:
                 is_valid = True
             
             if is_valid:

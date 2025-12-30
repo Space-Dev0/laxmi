@@ -325,9 +325,9 @@ class HMAEMAStrategy:
         # Check Pending Confirmation
         if self.pending_signal:
             is_valid = False
-            if self.pending_signal == "BUY" and curr['fast_ma'] > curr['slow_ma']:
+            if self.pending_signal == "BUY" and curr['ha_close'] > prev['ha_close']:
                 is_valid = True
-            elif self.pending_signal == "SELL" and curr['fast_ma'] < curr['slow_ma']:
+            elif self.pending_signal == "SELL" and curr['ha_close'] < prev['ha_close']:
                 is_valid = True
             
             if is_valid:
