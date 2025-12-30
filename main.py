@@ -18,7 +18,7 @@ from tradingapi_a.mticker import MTicker
 # Import Strategy
 from hma_strategy import HMAStrategy
 from ema_strategy import EMAStrategy
-from hma_price_strategy import HMAPriceStrategy
+from hma_ema_strategy import HMAEMAStrategy
 
 # Logging Setup
 logging.basicConfig(
@@ -366,7 +366,7 @@ def main():
         print(f"\nConfiguring instance for: {symbol}")
         print("1. HMA Crossover (Heikin Ashi)")
         print("2. EMA Crossover (Heikin Ashi)")
-        print("3. HMA Price Crossover (Heikin Ashi)")
+        print("3. HMA-EMA Crossover (Heikin Ashi)")
         choice = input(f"Select Strategy for {symbol} (1/2/3): ").strip()
         
         StrategyClass = None
@@ -378,8 +378,8 @@ def main():
             StrategyClass = EMAStrategy
             s_type_name = "EMA"
         elif choice == '3':
-            StrategyClass = HMAPriceStrategy
-            s_type_name = "HMA_Price"
+            StrategyClass = HMAEMAStrategy
+            s_type_name = "HMA_EMA"
         else:
             log.error(f"Invalid choice '{choice}' for {symbol}. Skipping.")
             continue
