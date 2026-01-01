@@ -182,7 +182,9 @@ class HMAEMAStrategy:
         if not self.data.empty:
             last_row = self.data.iloc[-1]
             log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Last Close: {last_row['close']} FastMA: {last_row['fast_ma']:.2f} SlowMA: {last_row['slow_ma']:.2f}")
-    
+
+        self.data.to_csv("output_debug.csv")  # For debugging purposes
+
     def _calculate_heikin_ashi(self, df):
         ha_df = df.copy()
         ha_df['ha_close'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
