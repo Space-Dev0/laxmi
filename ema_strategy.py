@@ -50,6 +50,9 @@ class EMAStrategy:
         self.hist_df = pd.DataFrame()
         self.intra_df = pd.DataFrame()
 
+    def _calculate_ema(self, series, period):
+        return series.ewm(span=period, adjust=False).mean().round(2)
+
     def fetch_data(self, fetch_hist=True, fetch_intra=True):
         """
         Fetches data based on flags and updates internal state.

@@ -60,6 +60,25 @@ class HMAEMAStrategy:
         self.hist_df = pd.DataFrame()
         self.intra_df = pd.DataFrame()
 
+    def _calculate_wma(self, series, period):
+        weights = np.arange(1, period + 1)
+        return series.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+
+    def _calculate_hma(self, series, period):
+        """Calculates Hull Moving Average"""
+        half_length = int(period / 2)
+        sqrt_length = int(round(period**0.5))
+        
+        wma_half = self._calculate_wma(series, half_length)
+        wma_full = self._calculate_wma(series, period)
+        
+        raw_hma = (2 * wma_half) - wma_full
+        hma = self._calculate_wma(raw_hma, sqrt_length)
+        return hma.round(2)
+
+    def _calculate_ema(self, series, period):
+        return series.ewm(span=period, adjust=False).mean().round(2)
+
     def fetch_data(self, fetch_hist=True, fetch_intra=True):
         """
         Fetches data based on flags and updates internal state.
