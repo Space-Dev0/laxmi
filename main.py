@@ -436,11 +436,46 @@ def main():
     if global_start_time:
          wait_for_start_time(global_start_time)
 
-    # 5.6 Initialize Data for Strategies (Late Fetching)
-    log.info("Fetching Historical Data for all strategies...")
+    # 5.6 Initialize Data for Strategies (Split Fetching)
+    log.info("--- Step 1: Fetching Historical Data (Pre-Wait) ---")
     for strat in STRATEGIES.values():
-        strat.initialize_data()
+        strat.fetch_data(fetch_hist=True, fetch_intra=False)
 
+    # 5.7 Wait for Next Candle Boundary
+    # Find the maximum interval to align with (safest bet for now)
+    intervals = [s.interval for s in STRATEGIES.values()]
+    if intervals:
+        max_interval = max(intervals)
+        now = datetime.now(tz=ZoneInfo('Asia/Kolkata'))
+        
+        # Calculate next boundary
+        # Example: 9:20, 3 min interval -> 9:21
+        # (20 // 3) = 6. (6+1)*3 = 21.
+        current_minute = now.minute
+        remainder = current_minute % max_interval
+        minutes_to_add = max_interval - remainder
+        
+        # Target time
+        target_time = now + timedelta(minutes=minutes_to_add)
+        target_time = target_time.replace(second=0, microsecond=0)
+        
+        # If target matches now (microseconds > 0), move to next
+        if target_time <= now:
+             target_time += timedelta(minutes=max_interval)
+             
+        wait_seconds = (target_time - now).total_seconds()
+        
+        # Add a small buffer (e.g. 2 seconds) to ensure candle is closed on server/socket side
+        wait_seconds += 2 
+        
+        log.info(f"Waiting for Candle Close ({max_interval} min config). Next boundary: {target_time.strftime('%H:%M:%S')}")
+        log.info(f"Sleeping for {wait_seconds:.2f} seconds...")
+        time.sleep(wait_seconds)
+        
+    # 5.8 Fetch Intraday and Start
+    log.info("--- Step 2: Fetching Intraday Data (Post-Wait) ---")
+    for strat in STRATEGIES.values():
+        strat.fetch_data(fetch_hist=False, fetch_intra=True)
 
 
     # 6. Start Strategy Monitor in Background Thread

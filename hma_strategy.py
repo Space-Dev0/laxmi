@@ -45,32 +45,14 @@ class HMAStrategy:
 
         # Initial Setup
         log.info(f"[{self.symbol}] Initializing Strategy with Token: {self.token_id}")
-        # self._fetch_historical_data() # Moved to explicit call
+        self.hist_df = pd.DataFrame()
+        self.intra_df = pd.DataFrame()
 
-    def initialize_data(self):
-        """Fetches initial data. Should be called after start time is reached."""
-        self._fetch_historical_data()
-
-    def _calculate_wma(self, series, period):
-        weights = np.arange(1, period + 1)
-        return series.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-
-    def _calculate_hma(self, series, period):
-        """Calculates Hull Moving Average"""
-        half_length = int(period / 2)
-        sqrt_length = int(round(period**0.5))
-        
-        wma_half = self._calculate_wma(series, half_length)
-        wma_full = self._calculate_wma(series, period)
-        
-        raw_hma = (2 * wma_half) - wma_full
-        hma = self._calculate_wma(raw_hma, sqrt_length)
-        return hma.round(2)
-
-    def _fetch_historical_data(self):
+    def fetch_data(self, fetch_hist=True, fetch_intra=True):
         """
-        Fetches Historical (past days) + Intraday (today) to ensure continuous data
-        without hitting the 1000 candle limit or missing live candles.
+        Fetches data based on flags and updates internal state.
+        fetch_hist: Get past days data
+        fetch_intra: Get today's data
         """
         try:
             # 1. Interval Mapping
@@ -82,86 +64,86 @@ class HMAStrategy:
             # ---------------------------------------------------------
             # Step A: Get Historical Data (Yesterday and back)
             # ---------------------------------------------------------
-            now = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata'))
-            # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
-            start_date = now - datetime.timedelta(days=2) 
-            
-            f_str = start_date.strftime("%Y-%m-%d")
-            t_str = now.strftime("%Y-%m-%d")
+            if fetch_hist:
+                now = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata'))
+                # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
+                start_date = now - datetime.timedelta(days=2) 
+                
+                f_str = start_date.strftime("%Y-%m-%d")
+                t_str = now.strftime("%Y-%m-%d")
 
-            log.info(f"[{self.symbol}] Fetching Historical: {f_str} to {t_str}")
-            
-            hist_df = pd.DataFrame()
-            try:
-                resp_hist = self.api.get_historical_chart(self.exchange, self.token_id, interval_str, f_str, t_str)
-                data_hist = resp_hist.json()
-                if data_hist.get('status') == 'success' and data_hist.get('data') and 'candles' in data_hist['data']:
-                    hist_df = pd.DataFrame(data_hist['data']['candles'], columns=['time', 'open', 'high', 'low', 'close', 'volume'])
-                    # Convert time and standardize
-                    hist_df['time'] = pd.to_datetime(hist_df['time']).dt.tz_localize(None)
-            except Exception as e:
-                log.warning(f"[{self.symbol}] Historical API failed (might be empty if holiday): {e}")
+                log.info(f"[{self.symbol}] Fetching Historical: {f_str} to {t_str}")
+                
+                try:
+                    resp_hist = self.api.get_historical_chart(self.exchange, self.token_id, interval_str, f_str, t_str)
+                    data_hist = resp_hist.json()
+                    if data_hist.get('status') == 'success' and data_hist.get('data') and 'candles' in data_hist['data']:
+                        self.hist_df = pd.DataFrame(data_hist['data']['candles'], columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+                        # Convert time and standardize
+                        self.hist_df['time'] = pd.to_datetime(self.hist_df['time']).dt.tz_localize(None)
+                except Exception as e:
+                    log.warning(f"[{self.symbol}] Historical API failed (might be empty if holiday): {e}")
 
             # ---------------------------------------------------------
             # Step B: Get Intraday Data (Today)
             # ---------------------------------------------------------
-            log.info(f"[{self.symbol}] Fetching Intraday (Today)")
-            
-            # Map Exchange String to ID for Intraday Endpoint (1-NSE, 4-BSE, etc.)
-            exch_map = {"NSE": "1", "NFO": "2", "CDS": "3", "BSE": "4", "BFO": "5"}
-            exch_id = exch_map.get(self.exchange, "1") # Default to 1 (NSE)
-            
-            intra_df = pd.DataFrame()
-            try:
-                resp_intra = self.api.get_intraday_chart(exch_id, self.token_id, interval_str)
-                data_intra = resp_intra.json()
-                if data_intra.get('status') == 'success' and data_intra.get('data') and 'candles' in data_intra['data']:
-                    intra_df = pd.DataFrame(data_intra['data']['candles'], columns=['time', 'open', 'high', 'low', 'close', 'volume'])
-                    # Convert time and standardize
-                    intra_df['time'] = pd.to_datetime(intra_df['time']).dt.tz_localize(None)
-            except Exception as e:
-                log.warning(f"[{self.symbol}] Intraday API failed (Market might be closed): {e}")
+            if fetch_intra:
+                log.info(f"[{self.symbol}] Fetching Intraday (Today)")
+                
+                # Map Exchange String to ID for Intraday Endpoint (1-NSE, 4-BSE, etc.)
+                exch_map = {"NSE": "1", "NFO": "2", "CDS": "3", "BSE": "4", "BFO": "5"}
+                exch_id = exch_map.get(self.exchange, "1") # Default to 1 (NSE)
+                
+                try:
+                    resp_intra = self.api.get_intraday_chart(exch_id, self.token_id, interval_str)
+                    data_intra = resp_intra.json()
+                    if data_intra.get('status') == 'success' and data_intra.get('data') and 'candles' in data_intra['data']:
+                        self.intra_df = pd.DataFrame(data_intra['data']['candles'], columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+                        # Convert time and standardize
+                        self.intra_df['time'] = pd.to_datetime(self.intra_df['time']).dt.tz_localize(None)
+                except Exception as e:
+                    log.warning(f"[{self.symbol}] Intraday API failed (Market might be closed): {e}")
 
             # ---------------------------------------------------------
             # Step C: Merge, Clean, and Calc HMA
             # ---------------------------------------------------------
-            if hist_df.empty and intra_df.empty:
-                log.warning(f"[{self.symbol}] No data found from either source.")
-                return
-
-            # Concatenate
-            full_df = pd.concat([df.dropna(axis=1, how='all') for df in [hist_df, intra_df]], ignore_index=True)
-            
-            # Drop duplicates based on time (in case overlap occurred)
-            full_df = full_df.drop_duplicates(subset='time', keep='last')
-            full_df = full_df.sort_values('time').reset_index(drop=True)
-            
-            # Convert columns to numeric
-            cols = ['open', 'high', 'low', 'close', 'volume']
-            full_df[cols] = full_df[cols].apply(pd.to_numeric)
-
-            self.data = full_df.dropna().reset_index(drop=True)
-            
-            # Filter out zero volume candles (no trades)
-            self.data = self.data[self.data['volume'] > 0].reset_index(drop=True)
-
-            # 1. Convert to HA
-            self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
-
-            # 2. Calculate HMA on HA_CLOSE
-            self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
-            self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)
-
-            # Save to self.data
-            
-            # self.data.to_csv("output_debug.csv")  # For debugging purposes
-
-            if not self.data.empty:
-                last_row = self.data.iloc[-1]
-                log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Time: {last_row['time']} Last Close: {last_row['close']} Short HMA: {last_row['short_hma']:.2f} Long HMA: {last_row['long_hma']:.2f}")
+            self._merge_and_calculate()
 
         except Exception as e:
             log.error(f"[{self.symbol}] Critical error in data fetch: {e}")
+
+    def _merge_and_calculate(self):
+        """Merges hist_df and intra_df and calculates indicators"""
+        if self.hist_df.empty and self.intra_df.empty:
+            log.warning(f"[{self.symbol}] No data found from either source.")
+            return
+
+        # Concatenate
+        full_df = pd.concat([df.dropna(axis=1, how='all') for df in [self.hist_df, self.intra_df]], ignore_index=True)
+        
+        # Drop duplicates based on time (in case overlap occurred)
+        full_df = full_df.drop_duplicates(subset='time', keep='last')
+        full_df = full_df.sort_values('time').reset_index(drop=True)
+        
+        # Convert columns to numeric
+        cols = ['open', 'high', 'low', 'close', 'volume']
+        full_df[cols] = full_df[cols].apply(pd.to_numeric)
+
+        self.data = full_df.dropna().reset_index(drop=True)
+        
+        # Filter out zero volume candles (no trades)
+        self.data = self.data[self.data['volume'] > 0].reset_index(drop=True)
+
+        # 1. Convert to HA
+        self.data = self._calculate_heikin_ashi(self.data).dropna().reset_index(drop=True)
+
+        # 2. Calculate HMA on HA_CLOSE
+        self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
+        self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)
+
+        if not self.data.empty:
+            last_row = self.data.iloc[-1]
+            log.info(f"[{self.symbol}] Data Loaded. Candles: {len(self.data)}. Time: {last_row['time']} Last Close: {last_row['close']} Short HMA: {last_row['short_hma']:.2f} Long HMA: {last_row['long_hma']:.2f}")
     
     def _calculate_heikin_ashi(self, df):
         ha_df = df.copy()
