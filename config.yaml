@@ -26,6 +26,7 @@ defaults:
   interval_minute: 1
   quantity: 1
   order_type: "MARKET"
+  limit_buffer_percentage: 0.1 # Percentage to add/subtract from limit price for better fill
   product_type: "NRML"
   start_time: "9:29"
   square_off_time: "15:15"

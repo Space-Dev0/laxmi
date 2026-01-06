@@ -33,6 +33,7 @@ class HMAStrategy:
         self.tp_pct = settings['tp_percentage']
         self.square_off_time = settings['square_off_time']
         self.required_confirmations = settings.get('confirmation_candles', 0)
+        self.limit_buffer = float(settings.get('limit_buffer_percentage', 0.0))
         
         # State
         self.position = "FLAT" # FLAT, LONG, SHORT
@@ -82,8 +83,13 @@ class HMAStrategy:
             # ---------------------------------------------------------
             if fetch_hist:
                 now = datetime.datetime.now(tz=ZoneInfo('Asia/Kolkata'))
-                # Look back 5 days to safely catch Fri/Thu if today is Mon/Tue
-                start_date = now - datetime.timedelta(days=2) 
+                
+                # Dynamic Lookback to handle Weekends vs Weekdays
+                # If Mon(0) or Tue(1), look back 4 days to catch Thu/Fri
+                # Else look back 2 days
+                days_back = 4 if now.weekday() in [0, 1] else 2
+                
+                start_date = now - datetime.timedelta(days=days_back) 
                 
                 f_str = start_date.strftime("%Y-%m-%d")
                 t_str = now.strftime("%Y-%m-%d")
@@ -156,6 +162,12 @@ class HMAStrategy:
         # 2. Calculate HMA on HA_CLOSE
         self.data['short_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_short_period)
         self.data['long_hma'] = self._calculate_hma(self.data['ha_close'], self.hma_long_period)
+
+        # --- RAM Optimization: Truncate Data ---
+        keep_size = max(self.hma_short_period, self.hma_long_period) * 3 + 10
+        if len(self.data) > keep_size:
+            self.data = self.data.tail(keep_size).copy().reset_index(drop=True)
+        # ---------------------------------------
 
         if not self.data.empty:
             last_row = self.data.iloc[-1]
@@ -256,8 +268,8 @@ class HMAStrategy:
         
         # --- RAM Optimization: Truncate Data ---
         # Keep enough candles for the longest period calculation + buffer
-        # HMA needs period + sqrt(period) effectively, so 2x period is plenty safe.
-        keep_size = max(self.hma_short_period, self.hma_long_period) * 2 + 10
+        # HMA needs period + sqrt(period) effectively, so 3x period is plenty safe.
+        keep_size = max(self.hma_short_period, self.hma_long_period) * 3 + 10
         if len(self.data) > keep_size:
             self.data = self.data.tail(keep_size).copy().reset_index(drop=True)
         # ---------------------------------------
@@ -347,13 +359,21 @@ class HMAStrategy:
         Places a Regular MIS LIMIT Order with Retry Logic.
         """
         max_retries = 3
-        
-        # Ensure price is formatted to 2 decimal places (e.g., "100.50")
-        limit_price = f"{float(price):.2f}"
+
+        # Apply Limit Buffer if Order Type is LIMIT
+        if self.order_type == "LIMIT":
+            p = float(price)
+            if transaction_type == "BUY":
+                # Buy higher to ensure fill
+                p = p * (1 + self.limit_buffer / 100)
+            elif transaction_type == "SELL":
+                 # Sell lower to ensure fill
+                p = p * (1 - self.limit_buffer / 100)
+            limit_price = f"{p:.2f}"
         
         for attempt in range(1, max_retries + 1):
             try:
-                log.info(f"[{self.symbol}] Placing LIMIT Order ({transaction_type}) @ {limit_price}, Attempt {attempt}/{max_retries}...")
+                log.info(f"[{self.symbol}] Placing Order ({transaction_type}) @ {price}, Attempt {attempt}/{max_retries}...")
                 
                 resp = self.api.place_order(
                     _variety="regular",
